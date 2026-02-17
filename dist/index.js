@@ -5,7 +5,7 @@ function generateId() {
 // Main graph object with invoke method (required by TrikGateway)
 export default {
     async invoke(input) {
-        const { action, input: actionInput, storage, config } = input;
+        const { action, input: actionInput, storage } = input;
         switch (action) {
             case 'add_note':
                 return addNote(actionInput, storage);
@@ -13,10 +13,10 @@ export default {
                 return listNotes(storage);
             case 'get_note':
                 return getNote(actionInput, storage);
+            case 'update_note':
+                return updateNote(actionInput, storage);
             case 'delete_note':
                 return deleteNote(actionInput, storage);
-            case 'show_config':
-                return showConfig(config);
             default:
                 return { agentData: { template: 'error', message: `Unknown action: ${action}` } };
         }
@@ -56,11 +56,20 @@ async function listNotes(storage) {
             },
         };
     }
+    // Fetch titles for each note
+    const titles = [];
+    for (const noteId of index) {
+        const note = (await storage.get(`notes:${noteId}`));
+        if (note) {
+            titles.push(note.title);
+        }
+    }
     return {
         agentData: {
             template: 'notes_list',
             count: index.length,
             noteIds: index,
+            titles,
         },
     };
 }
@@ -102,6 +111,47 @@ async function getNote(input, storage) {
         },
     };
 }
+async function updateNote(input, storage) {
+    let noteToUpdate = null;
+    let noteId;
+    if (input.noteId) {
+        noteId = input.noteId;
+        noteToUpdate = (await storage.get(`notes:${noteId}`));
+    }
+    else if (input.titleSearch) {
+        noteToUpdate = await findNoteByTitle(input.titleSearch, storage);
+        noteId = noteToUpdate?.id;
+    }
+    if (!noteToUpdate || !noteId) {
+        return {
+            agentData: {
+                template: 'note_not_found',
+            },
+        };
+    }
+    // Check if any changes were provided
+    if (!input.newTitle && !input.newContent) {
+        return {
+            agentData: {
+                template: 'no_changes',
+            },
+        };
+    }
+    // Update the note
+    const updatedNote = {
+        ...noteToUpdate,
+        title: input.newTitle ?? noteToUpdate.title,
+        content: input.newContent ?? noteToUpdate.content,
+    };
+    await storage.set(`notes:${noteId}`, updatedNote);
+    return {
+        agentData: {
+            template: 'note_updated',
+            noteId,
+            title: updatedNote.title,
+        },
+    };
+}
 async function deleteNote(input, storage) {
     let noteToDelete = null;
     let noteId;
@@ -132,16 +182,6 @@ async function deleteNote(input, storage) {
             template: 'note_deleted',
             noteId,
             title: noteToDelete.title,
-        },
-    };
-}
-async function showConfig(config) {
-    return {
-        agentData: {
-            template: 'config_status',
-            hasApiKey: config.has('API_KEY'),
-            hasWebhook: config.has('WEBHOOK_URL'),
-            configuredKeys: config.keys(),
         },
     };
 }

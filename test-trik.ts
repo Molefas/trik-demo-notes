@@ -49,20 +49,29 @@ async function test() {
     console.log('--- END ---');
   }
 
-  // Test show_config
-  console.log('\n4. Testing show_config...');
-  const configResult = await gateway.execute('trik-demo-notes', 'show_config', {});
-  console.log('Result:', JSON.stringify(configResult, null, 2));
+  // Test update_note
+  console.log('\n4. Testing update_note (change title and content)...');
+  const updateResult = await gateway.execute('trik-demo-notes', 'update_note', {
+    titleSearch: 'Test',
+    newTitle: 'Updated Test Note',
+    newContent: 'This content has been updated!',
+  });
+  console.log('Result:', JSON.stringify(updateResult, null, 2));
+
+  // Verify update with list_notes
+  console.log('\n5. Verifying update (list_notes should show new title)...');
+  const listAfterUpdate = await gateway.execute('trik-demo-notes', 'list_notes', {});
+  console.log('Result:', JSON.stringify(listAfterUpdate, null, 2));
 
   // Test delete_note
-  console.log('\n5. Testing delete_note (by title search)...');
+  console.log('\n6. Testing delete_note (by title search)...');
   const deleteResult = await gateway.execute('trik-demo-notes', 'delete_note', {
-    titleSearch: 'Test',
+    titleSearch: 'Updated',
   });
   console.log('Result:', JSON.stringify(deleteResult, null, 2));
 
   // Verify deletion
-  console.log('\n6. Verifying deletion (list_notes should show 0)...');
+  console.log('\n7. Verifying deletion (list_notes)...');
   const finalListResult = await gateway.execute('trik-demo-notes', 'list_notes', {});
   console.log('Result:', JSON.stringify(finalListResult, null, 2));
 

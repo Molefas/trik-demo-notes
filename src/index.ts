@@ -2,7 +2,6 @@ import type {
   GraphInput,
   GraphResult,
   TrikStorageContext,
-  TrikConfigContext,
 } from '@trikhub/manifest';
 
 interface Note {
@@ -20,7 +19,7 @@ function generateId(): string {
 // Main graph object with invoke method (required by TrikGateway)
 export default {
   async invoke(input: GraphInput): Promise<GraphResult> {
-    const { action, input: actionInput, storage, config } = input;
+    const { action, input: actionInput, storage } = input;
 
     switch (action) {
       case 'add_note':
@@ -29,10 +28,13 @@ export default {
         return listNotes(storage!);
       case 'get_note':
         return getNote(actionInput as { noteId?: string; titleSearch?: string }, storage!);
+      case 'update_note':
+        return updateNote(
+          actionInput as { noteId?: string; titleSearch?: string; newTitle?: string; newContent?: string },
+          storage!
+        );
       case 'delete_note':
         return deleteNote(actionInput as { noteId?: string; titleSearch?: string }, storage!);
-      case 'show_config':
-        return showConfig(config!);
       default:
         return { agentData: { template: 'error', message: `Unknown action: ${action}` } };
     }
@@ -82,11 +84,21 @@ async function listNotes(storage: TrikStorageContext): Promise<GraphResult> {
     };
   }
 
+  // Fetch titles for each note
+  const titles: string[] = [];
+  for (const noteId of index) {
+    const note = (await storage.get(`notes:${noteId}`)) as Note | null;
+    if (note) {
+      titles.push(note.title);
+    }
+  }
+
   return {
     agentData: {
       template: 'notes_list',
       count: index.length,
       noteIds: index,
+      titles,
     },
   };
 }
@@ -142,6 +154,55 @@ async function getNote(
   };
 }
 
+async function updateNote(
+  input: { noteId?: string; titleSearch?: string; newTitle?: string; newContent?: string },
+  storage: TrikStorageContext
+): Promise<GraphResult> {
+  let noteToUpdate: Note | null = null;
+  let noteId: string | undefined;
+
+  if (input.noteId) {
+    noteId = input.noteId;
+    noteToUpdate = (await storage.get(`notes:${noteId}`)) as Note | null;
+  } else if (input.titleSearch) {
+    noteToUpdate = await findNoteByTitle(input.titleSearch, storage);
+    noteId = noteToUpdate?.id;
+  }
+
+  if (!noteToUpdate || !noteId) {
+    return {
+      agentData: {
+        template: 'note_not_found',
+      },
+    };
+  }
+
+  // Check if any changes were provided
+  if (!input.newTitle && !input.newContent) {
+    return {
+      agentData: {
+        template: 'no_changes',
+      },
+    };
+  }
+
+  // Update the note
+  const updatedNote: Note = {
+    ...noteToUpdate,
+    title: input.newTitle ?? noteToUpdate.title,
+    content: input.newContent ?? noteToUpdate.content,
+  };
+  await storage.set(`notes:${noteId}`, updatedNote);
+
+  return {
+    agentData: {
+      template: 'note_updated',
+      noteId,
+      title: updatedNote.title,
+    },
+  };
+}
+
 async function deleteNote(
   input: { noteId?: string; titleSearch?: string },
   storage: TrikStorageContext
@@ -179,17 +240,6 @@ async function deleteNote(
       template: 'note_deleted',
       noteId,
       title: noteToDelete.title,
-    },
-  };
-}
-
-async function showConfig(config: TrikConfigContext): Promise<GraphResult> {
-  return {
-    agentData: {
-      template: 'config_status',
-      hasApiKey: config.has('API_KEY'),
-      hasWebhook: config.has('WEBHOOK_URL'),
-      configuredKeys: config.keys(),
     },
   };
 }

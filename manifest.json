@@ -2,7 +2,7 @@
   "id": "trik-demo-notes",
   "name": "Demo Notes",
   "description": "A demo trik for testing storage and configuration capabilities",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "actions": {
     "add_note": {
       "description": "Add a new note to persistent storage",
@@ -29,7 +29,7 @@
       }
     },
     "list_notes": {
-      "description": "List all stored notes",
+      "description": "List all stored notes with their titles",
       "inputSchema": { "type": "object", "properties": {} },
       "responseMode": "template",
       "agentDataSchema": {
@@ -37,17 +37,18 @@
         "properties": {
           "template": { "type": "string", "enum": ["notes_list", "no_notes"] },
           "count": { "type": "integer" },
-          "noteIds": { "type": "array", "items": { "type": "string", "format": "id" } }
+          "noteIds": { "type": "array", "items": { "type": "string", "format": "id" } },
+          "titles": { "type": "array", "items": { "type": "string", "maxLength": 100 } }
         },
         "required": ["template", "count"]
       },
       "responseTemplates": {
-        "notes_list": { "text": "Found {{count}} note(s)" },
+        "notes_list": { "text": "Found {{count}} note(s): {{titles}}" },
         "no_notes": { "text": "No notes found. Add some notes first!" }
       }
     },
     "get_note": {
-      "description": "Get a specific note by ID or by searching for it by title",
+      "description": "Display a note's full content to the user. Use this when the user wants to READ or SEE a specific note. The content will be shown directly to the user.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -65,8 +66,35 @@
         }
       }
     },
+    "update_note": {
+      "description": "Update an existing note's title and/or content. Use this when the user wants to EDIT or MODIFY a note.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "noteId": { "type": "string", "description": "The note ID to update (optional if searching by title)" },
+          "titleSearch": { "type": "string", "description": "Search for a note by title to update (partial match)" },
+          "newTitle": { "type": "string", "description": "New title for the note (optional, keeps existing if not provided)" },
+          "newContent": { "type": "string", "description": "New content for the note (optional, keeps existing if not provided)" }
+        }
+      },
+      "responseMode": "template",
+      "agentDataSchema": {
+        "type": "object",
+        "properties": {
+          "template": { "type": "string", "enum": ["note_updated", "note_not_found", "no_changes"] },
+          "noteId": { "type": "string", "format": "id" },
+          "title": { "type": "string", "maxLength": 100, "pattern": "^.{1,100}$" }
+        },
+        "required": ["template"]
+      },
+      "responseTemplates": {
+        "note_updated": { "text": "Updated note \"{{title}}\" ({{noteId}})" },
+        "note_not_found": { "text": "Note not found" },
+        "no_changes": { "text": "No changes provided. Specify newTitle and/or newContent." }
+      }
+    },
     "delete_note": {
-      "description": "Delete a note by ID or by searching for it by title",
+      "description": "Delete a note by ID or by searching for it by title. Use this when the user wants to REMOVE a note permanently.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -87,24 +115,6 @@
       "responseTemplates": {
         "note_deleted": { "text": "Deleted note \"{{title}}\" ({{noteId}})" },
         "note_not_found": { "text": "Note not found" }
-      }
-    },
-    "show_config": {
-      "description": "Show current configuration status (demonstrates config access)",
-      "inputSchema": { "type": "object", "properties": {} },
-      "responseMode": "template",
-      "agentDataSchema": {
-        "type": "object",
-        "properties": {
-          "template": { "type": "string", "enum": ["config_status"] },
-          "hasApiKey": { "type": "boolean" },
-          "hasWebhook": { "type": "boolean" },
-          "configuredKeys": { "type": "array", "items": { "type": "string", "format": "id" } }
-        },
-        "required": ["template", "hasApiKey", "hasWebhook", "configuredKeys"]
-      },
-      "responseTemplates": {
-        "config_status": { "text": "Configuration: API_KEY={{hasApiKey}}, WEBHOOK_URL={{hasWebhook}}" }
       }
     }
   },
