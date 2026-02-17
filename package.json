@@ -1,20 +1,19 @@
 {
   "name": "@molefas/trik-demo-notes",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Demo trik for testing storage and configuration capabilities",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
-    "test": "tsx test-trik.ts",
-    "prepublish": "npm run build"
+    "test": "tsx test-trik.ts"
   },
   "dependencies": {
-    "@trikhub/manifest": "file:../../skill-poc-v2/packages/js/manifest"
+    "@trikhub/manifest": "^0.6.0"
   },
   "devDependencies": {
-    "@trikhub/gateway": "file:../../skill-poc-v2/packages/js/gateway",
+    "@trikhub/gateway": "^0.6.0",
     "@types/node": "^20.0.0",
     "tsx": "^4.0.0",
     "typescript": "^5.6.0"
