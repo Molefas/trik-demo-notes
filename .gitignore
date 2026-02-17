@@ -1,5 +1,4 @@
 node_modules/
-dist/
 .trikhub/secrets.json
 *.log
 .DS_Store
