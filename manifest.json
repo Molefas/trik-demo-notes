@@ -1,8 +1,9 @@
 {
+  "schemaVersion": 1,
   "id": "trik-demo-notes",
   "name": "Demo Notes",
   "description": "A demo trik for testing storage and configuration capabilities",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "actions": {
     "add_note": {
       "description": "Add a new note to persistent storage",
@@ -38,7 +39,7 @@
           "template": { "type": "string", "enum": ["notes_list", "no_notes"] },
           "count": { "type": "integer" },
           "noteIds": { "type": "array", "items": { "type": "string", "format": "id" } },
-          "titles": { "type": "array", "items": { "type": "string", "maxLength": 100 } }
+          "titles": { "type": "array", "items": { "type": "string", "maxLength": 100, "pattern": "^.{1,100}$" } }
         },
         "required": ["template", "count"]
       },
@@ -120,7 +121,6 @@
   },
   "capabilities": {
     "tools": [],
-    "canRequestClarification": false,
     "storage": {
       "enabled": true,
       "maxSizeBytes": 10485760,
@@ -136,9 +136,7 @@
     ]
   },
   "limits": {
-    "maxExecutionTimeMs": 30000,
-    "maxLlmCalls": 0,
-    "maxToolCalls": 0
+    "maxExecutionTimeMs": 30000
   },
   "entry": {
     "module": "dist/index.js",
