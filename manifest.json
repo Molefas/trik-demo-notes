@@ -3,7 +3,7 @@
   "id": "trik-demo-notes",
   "name": "Demo Notes",
   "description": "A demo trik for testing storage and configuration capabilities",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "actions": {
     "add_note": {
       "description": "Add a new note to persistent storage",

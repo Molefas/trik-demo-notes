@@ -1,6 +1,6 @@
 {
   "name": "@molefas/trik-demo-notes",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Demo trik for testing storage and configuration capabilities",
   "type": "module",
   "main": "dist/index.js",
