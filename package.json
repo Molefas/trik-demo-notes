@@ -1,21 +1,22 @@
 {
   "name": "@molefas/trik-demo-notes",
-  "version": "1.0.7",
-  "description": "Demo trik for testing storage and configuration capabilities",
+  "version": "2.1.0",
+  "description": "Demo trik for managing personal notes with persistent storage",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist",
-    "test": "tsx test-trik.ts"
+    "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@trikhub/manifest": "^0.6.0"
+    "@trikhub/sdk": "file:../../skill-poc-v2/packages/js/sdk",
+    "@langchain/anthropic": "^0.3.0",
+    "@langchain/core": "^0.3.0",
+    "@langchain/langgraph": "^0.2.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@trikhub/gateway": "^0.6.0",
     "@types/node": "^20.0.0",
-    "tsx": "^4.0.0",
     "typescript": "^5.6.0"
   },
   "engines": {

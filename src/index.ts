@@ -1,8 +1,26 @@
-import type {
-  GraphInput,
-  GraphResult,
-  TrikStorageContext,
-} from '@trikhub/manifest';
+/**
+ * Demo Notes — conversational trik.
+ *
+ * A personal notes assistant that manages notes with persistent storage.
+ * Uses the wrapAgent() pattern for multi-turn conversation via handoff.
+ */
+
+import { ChatAnthropic } from '@langchain/anthropic';
+import { createReactAgent } from '@langchain/langgraph/prebuilt';
+import { tool } from '@langchain/core/tools';
+import { z } from 'zod';
+import { wrapAgent, transferBackTool } from '@trikhub/sdk';
+import type { TrikContext, TrikStorageContext } from '@trikhub/sdk';
+import { readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const systemPrompt = readFileSync(join(__dirname, '../src/prompts/system.md'), 'utf-8');
+
+// ============================================================================
+// Note helpers
+// ============================================================================
 
 interface Note {
   id: string;
@@ -11,105 +29,16 @@ interface Note {
   createdAt: string;
 }
 
-// Generate a simple ID
 function generateId(): string {
   return `note_${Date.now().toString(36)}`;
 }
 
-// Main graph object with invoke method (required by TrikGateway)
-export default {
-  async invoke(input: GraphInput): Promise<GraphResult> {
-    const { action, input: actionInput, storage } = input;
-
-    switch (action) {
-      case 'add_note':
-        return addNote(actionInput as { title: string; content: string }, storage!);
-      case 'list_notes':
-        return listNotes(storage!);
-      case 'get_note':
-        return getNote(actionInput as { noteId?: string; titleSearch?: string }, storage!);
-      case 'update_note':
-        return updateNote(
-          actionInput as { noteId?: string; titleSearch?: string; newTitle?: string; newContent?: string },
-          storage!
-        );
-      case 'delete_note':
-        return deleteNote(actionInput as { noteId?: string; titleSearch?: string }, storage!);
-      default:
-        return { agentData: { template: 'error', message: `Unknown action: ${action}` } };
-    }
-  },
-};
-
-async function addNote(
-  input: { title: string; content: string },
-  storage: TrikStorageContext
-): Promise<GraphResult> {
-  const noteId = generateId();
-  const note: Note = {
-    id: noteId,
-    title: input.title,
-    content: input.content,
-    createdAt: new Date().toISOString(),
-  };
-
-  // Store the note
-  await storage.set(`notes:${noteId}`, note);
-
-  // Update the index
-  const indexRaw = await storage.get('notes:index');
-  const index = (indexRaw as string[] | null) ?? [];
-  index.push(noteId);
-  await storage.set('notes:index', index);
-
-  return {
-    agentData: {
-      template: 'note_added',
-      noteId,
-      title: input.title,
-    },
-  };
-}
-
-async function listNotes(storage: TrikStorageContext): Promise<GraphResult> {
-  const indexRaw = await storage.get('notes:index');
-  const index = (indexRaw as string[] | null) ?? [];
-
-  if (index.length === 0) {
-    return {
-      agentData: {
-        template: 'no_notes',
-        count: 0,
-      },
-    };
-  }
-
-  // Fetch titles for each note
-  const titles: string[] = [];
-  for (const noteId of index) {
-    const note = (await storage.get(`notes:${noteId}`)) as Note | null;
-    if (note) {
-      titles.push(note.title);
-    }
-  }
-
-  return {
-    agentData: {
-      template: 'notes_list',
-      count: index.length,
-      noteIds: index,
-      titles,
-    },
-  };
-}
-
 async function findNoteByTitle(
   titleSearch: string,
-  storage: TrikStorageContext
+  storage: TrikStorageContext,
 ): Promise<Note | null> {
   const indexRaw = await storage.get('notes:index');
   const index = (indexRaw as string[] | null) ?? [];
-
   const searchLower = titleSearch.toLowerCase();
 
   for (const noteId of index) {
@@ -118,128 +47,186 @@ async function findNoteByTitle(
       return note;
     }
   }
-
   return null;
 }
 
-async function getNote(
+async function resolveNote(
   input: { noteId?: string; titleSearch?: string },
-  storage: TrikStorageContext
-): Promise<GraphResult> {
-  let note: Note | null = null;
-
+  storage: TrikStorageContext,
+): Promise<Note | null> {
   if (input.noteId) {
-    note = (await storage.get(`notes:${input.noteId}`)) as Note | null;
-  } else if (input.titleSearch) {
-    note = await findNoteByTitle(input.titleSearch, storage);
+    return (await storage.get(`notes:${input.noteId}`)) as Note | null;
   }
-
-  if (!note) {
-    return {
-      responseMode: 'template',
-      agentData: {
-        template: 'note_not_found',
-      },
-    };
+  if (input.titleSearch) {
+    return findNoteByTitle(input.titleSearch, storage);
   }
-
-  // Return full note content via passthrough
-  return {
-    responseMode: 'passthrough',
-    userContent: {
-      contentType: 'note',
-      content: `# ${note.title}\n\n${note.content}\n\n---\nCreated: ${note.createdAt}\nID: ${note.id}`,
-      metadata: { noteId: note.id, title: note.title },
-    },
-  };
+  return null;
 }
 
-async function updateNote(
-  input: { noteId?: string; titleSearch?: string; newTitle?: string; newContent?: string },
-  storage: TrikStorageContext
-): Promise<GraphResult> {
-  let noteToUpdate: Note | null = null;
-  let noteId: string | undefined;
+// ============================================================================
+// LangChain tool builders (closed over storage from context)
+// ============================================================================
 
-  if (input.noteId) {
-    noteId = input.noteId;
-    noteToUpdate = (await storage.get(`notes:${noteId}`)) as Note | null;
-  } else if (input.titleSearch) {
-    noteToUpdate = await findNoteByTitle(input.titleSearch, storage);
-    noteId = noteToUpdate?.id;
-  }
+function buildTools(storage: TrikStorageContext) {
+  const addNote = tool(
+    async (input) => {
+      const noteId = generateId();
+      const note: Note = {
+        id: noteId,
+        title: input.title,
+        content: input.content,
+        createdAt: new Date().toISOString(),
+      };
 
-  if (!noteToUpdate || !noteId) {
-    return {
-      agentData: {
-        template: 'note_not_found',
-      },
-    };
-  }
+      await storage.set(`notes:${noteId}`, note);
 
-  // Check if any changes were provided
-  if (!input.newTitle && !input.newContent) {
-    return {
-      agentData: {
-        template: 'no_changes',
-      },
-    };
-  }
+      const indexRaw = await storage.get('notes:index');
+      const index = (indexRaw as string[] | null) ?? [];
+      index.push(noteId);
+      await storage.set('notes:index', index);
 
-  // Update the note
-  const updatedNote: Note = {
-    ...noteToUpdate,
-    title: input.newTitle ?? noteToUpdate.title,
-    content: input.newContent ?? noteToUpdate.content,
-  };
-  await storage.set(`notes:${noteId}`, updatedNote);
-
-  return {
-    agentData: {
-      template: 'note_updated',
-      noteId,
-      title: updatedNote.title,
+      return JSON.stringify({ status: 'created', noteId, title: input.title });
     },
-  };
+    {
+      name: 'addNote',
+      description: 'Add a new note to persistent storage',
+      schema: z.object({
+        title: z.string().describe('Note title'),
+        content: z.string().describe('Note content'),
+      }),
+    },
+  );
+
+  const listNotes = tool(
+    async () => {
+      const indexRaw = await storage.get('notes:index');
+      const index = (indexRaw as string[] | null) ?? [];
+
+      if (index.length === 0) {
+        return JSON.stringify({ count: 0, notes: [] });
+      }
+
+      const notes: Array<{ id: string; title: string }> = [];
+      for (const noteId of index) {
+        const note = (await storage.get(`notes:${noteId}`)) as Note | null;
+        if (note) {
+          notes.push({ id: note.id, title: note.title });
+        }
+      }
+
+      return JSON.stringify({ count: notes.length, notes });
+    },
+    {
+      name: 'listNotes',
+      description: 'List all stored notes with their titles and IDs',
+      schema: z.object({}),
+    },
+  );
+
+  const getNote = tool(
+    async (input) => {
+      const note = await resolveNote(input, storage);
+
+      if (!note) {
+        return JSON.stringify({ status: 'not_found' });
+      }
+
+      return JSON.stringify({
+        status: 'found',
+        noteId: note.id,
+        title: note.title,
+        content: note.content,
+        createdAt: note.createdAt,
+      });
+    },
+    {
+      name: 'getNote',
+      description: 'Get a note by ID or title search',
+      schema: z.object({
+        noteId: z.string().optional().describe('The note ID to retrieve'),
+        titleSearch: z.string().optional().describe('Search for a note by title (partial match)'),
+      }),
+    },
+  );
+
+  const updateNote = tool(
+    async (input) => {
+      const note = await resolveNote(input, storage);
+      if (!note) {
+        return JSON.stringify({ status: 'not_found' });
+      }
+
+      if (!input.newTitle && !input.newContent) {
+        return JSON.stringify({ status: 'no_changes' });
+      }
+
+      const updated: Note = {
+        ...note,
+        title: input.newTitle ?? note.title,
+        content: input.newContent ?? note.content,
+      };
+      await storage.set(`notes:${note.id}`, updated);
+
+      return JSON.stringify({ status: 'updated', noteId: note.id, title: updated.title });
+    },
+    {
+      name: 'updateNote',
+      description: 'Update an existing note\'s title and/or content',
+      schema: z.object({
+        noteId: z.string().optional().describe('The note ID to update'),
+        titleSearch: z.string().optional().describe('Search for a note by title (partial match)'),
+        newTitle: z.string().optional().describe('New title for the note'),
+        newContent: z.string().optional().describe('New content for the note'),
+      }),
+    },
+  );
+
+  const deleteNote = tool(
+    async (input) => {
+      const note = await resolveNote(input, storage);
+      if (!note) {
+        return JSON.stringify({ status: 'not_found' });
+      }
+
+      await storage.delete(`notes:${note.id}`);
+
+      const indexRaw = await storage.get('notes:index');
+      const index = (indexRaw as string[] | null) ?? [];
+      await storage.set('notes:index', index.filter((id) => id !== note.id));
+
+      return JSON.stringify({ status: 'deleted', noteId: note.id, title: note.title });
+    },
+    {
+      name: 'deleteNote',
+      description: 'Delete a note by ID or title search',
+      schema: z.object({
+        noteId: z.string().optional().describe('The note ID to delete'),
+        titleSearch: z.string().optional().describe('Search for a note by title (partial match)'),
+      }),
+    },
+  );
+
+  return [addNote, listNotes, getNote, updateNote, deleteNote];
 }
 
-async function deleteNote(
-  input: { noteId?: string; titleSearch?: string },
-  storage: TrikStorageContext
-): Promise<GraphResult> {
-  let noteToDelete: Note | null = null;
-  let noteId: string | undefined;
+// ============================================================================
+// Agent entry point
+// ============================================================================
 
-  if (input.noteId) {
-    noteId = input.noteId;
-    noteToDelete = (await storage.get(`notes:${noteId}`)) as Note | null;
-  } else if (input.titleSearch) {
-    noteToDelete = await findNoteByTitle(input.titleSearch, storage);
-    noteId = noteToDelete?.id;
-  }
+export default wrapAgent((context: TrikContext) => {
+  const model = new ChatAnthropic({
+    modelName: 'claude-sonnet-4-20250514',
+    anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+  });
 
-  if (!noteToDelete || !noteId) {
-    return {
-      agentData: {
-        template: 'note_not_found',
-      },
-    };
-  }
+  const tools = [
+    ...buildTools(context.storage),
+    transferBackTool,
+  ];
 
-  // Delete the note
-  await storage.delete(`notes:${noteId}`);
-
-  // Update the index
-  const indexRaw = await storage.get('notes:index');
-  const index = (indexRaw as string[] | null) ?? [];
-  const newIndex = index.filter((id) => id !== noteId);
-  await storage.set('notes:index', newIndex);
-
-  return {
-    agentData: {
-      template: 'note_deleted',
-      noteId,
-      title: noteToDelete.title,
-    },
-  };
-}
+  return createReactAgent({
+    llm: model,
+    tools,
+    messageModifier: systemPrompt,
+  });
+});
