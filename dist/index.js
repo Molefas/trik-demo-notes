@@ -154,7 +154,7 @@ function buildTools(storage) {
 export default wrapAgent((context) => {
     const model = new ChatAnthropic({
         modelName: 'claude-sonnet-4-20250514',
-        anthropicApiKey: process.env.ANTHROPIC_API_KEY,
+        anthropicApiKey: context.config.get('ANTHROPIC_API_KEY'),
     });
     const tools = [
         ...buildTools(context.storage),

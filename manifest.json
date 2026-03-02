@@ -3,7 +3,7 @@
   "id": "trik-demo-notes",
   "name": "Demo Notes",
   "description": "A demo trik for managing personal notes with persistent storage",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "agent": {
     "mode": "conversational",
     "handoffDescription": "Manages personal notes — add, list, get, update, and delete notes with persistent storage",
@@ -56,6 +56,14 @@
     "storage": {
       "enabled": true
     }
+  },
+  "config": {
+    "required": [
+      {
+        "key": "ANTHROPIC_API_KEY",
+        "description": "Anthropic API key for the notes agent"
+      }
+    ]
   },
   "limits": { "maxTurnTimeMs": 30000 },
   "entry": {

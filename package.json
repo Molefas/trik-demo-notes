@@ -1,6 +1,6 @@
 {
   "name": "@molefas/trik-demo-notes",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Demo trik for managing personal notes with persistent storage",
   "type": "module",
   "main": "dist/index.js",
