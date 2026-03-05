@@ -3,7 +3,7 @@
   "id": "trik-demo-notes",
   "name": "Demo Notes",
   "description": "A demo trik for managing personal notes with persistent storage",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "agent": {
     "mode": "conversational",
     "handoffDescription": "Manages personal notes \u2014 add, list, get, update, and delete notes with persistent storage",
