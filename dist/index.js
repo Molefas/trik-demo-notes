@@ -9,11 +9,24 @@ import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { tool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { wrapAgent, transferBackTool } from '@trikhub/sdk';
-import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const systemPrompt = readFileSync(join(__dirname, '../src/prompts/system.md'), 'utf-8');
+const systemPrompt = `# Demo Notes
+
+You are a personal notes assistant. You help users manage their notes using persistent storage.
+
+## Your tools
+
+- **addNote**: Create a new note with a title and content
+- **listNotes**: List all stored notes
+- **getNote**: Retrieve a note by ID or title search
+- **updateNote**: Update a note's title or content
+- **deleteNote**: Delete a note by ID or title search
+
+## Guidelines
+
+- When the user wants to find a note, try searching by title first
+- Show note content when the user asks to read or view a note
+- Confirm before deleting notes
+- When the user's request is outside your expertise, use the transfer_back tool to return to the main agent`;
 function generateId() {
     return `note_${Date.now().toString(36)}`;
 }

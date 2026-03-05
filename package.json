@@ -1,6 +1,6 @@
 {
   "name": "@molefas/trik-demo-notes",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Demo trik for managing personal notes with persistent storage",
   "type": "module",
   "main": "dist/index.js",
@@ -9,7 +9,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@trikhub/sdk": "^0.12.0",
+    "@trikhub/sdk": "latest",
     "@langchain/anthropic": "^0.3.0",
     "@langchain/core": "^0.3.0",
     "@langchain/langgraph": "^0.2.0",
